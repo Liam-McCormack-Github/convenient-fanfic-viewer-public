@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES6",
+    "module": "None",
+    "lib": ["DOM", "ES6"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "removeComments": true,
+    "alwaysStrict": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*"]
+}
