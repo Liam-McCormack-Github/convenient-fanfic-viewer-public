@@ -84,3 +84,4 @@ interface Window {
     );
   }
 })();
+true;

@@ -49,3 +49,4 @@
         window.ReactNativeWebView.postMessage(JSON.stringify({ type: "nav_success" }));
     }
 })();
+true;
