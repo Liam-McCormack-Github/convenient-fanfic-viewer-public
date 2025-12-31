@@ -28,218 +28,398 @@
       if (isMystery) {
         return { current_url, mystery_work: true };
       }
-      const workMeta = document.querySelector("dl.work.meta.group");
-      const workSkin = document.querySelector("#workskin");
-      if (!workMeta || !workSkin) {
-        return { current_url, error: "Metadata container not found" };
-      }
-      const extractText = (sel, ctx = document) => {
+      const getWorkMeta = () => {
+        const workMeta = document.querySelector("dl.work.meta.group");
+        if (!workMeta) {
+          throw new Error("workMeta container not found");
+        }
+        return workMeta;
+      };
+      const getWorkSkin = () => {
+        const workSkin = document.querySelector("#workskin");
+        if (!workSkin) {
+          throw new Error("workSkin container not found");
+        }
+        return workSkin;
+      };
+      const getTitle = (workSkin) => {
+        var _a, _b, _c;
+        const title =
+          (_c =
+            (_b =
+              (_a = workSkin.querySelector("h2.title.heading")) === null ||
+              _a === void 0
+                ? void 0
+                : _a.textContent) === null || _b === void 0
+              ? void 0
+              : _b.trim()) !== null && _c !== void 0
+            ? _c
+            : null;
+        if (!title) {
+          throw new Error("title not found");
+        }
+        return title;
+      };
+      const getAuthors = (workSkin) => {
+        const byline = workSkin.querySelector("h3.byline.heading");
+        if (!byline) {
+          throw new Error("byline not found");
+        }
+        const authors = [];
+        byline.childNodes.forEach((node) => {
+          var _a, _b;
+          if (node.nodeType === Node.ELEMENT_NODE && node.tagName === "A") {
+            const link = node;
+            const name =
+              (_a = link.textContent) === null || _a === void 0
+                ? void 0
+                : _a.trim();
+            if (name) {
+              authors.push({ name, url: link.href });
+            }
+          } else if (node.nodeType === Node.TEXT_NODE) {
+            const text =
+              (_b = node.textContent) === null || _b === void 0
+                ? void 0
+                : _b.trim();
+            if (text && text !== "," && text.toLowerCase() !== "and") {
+              const names = text.split(/, | and /);
+              names.forEach((n) => {
+                const trimmedName = n.trim();
+                if (trimmedName) {
+                  authors.push({ name: trimmedName, url: null });
+                }
+              });
+            }
+          }
+        });
+        if (authors.length === 0) {
+          throw new Error("author names could not be parsed");
+        }
+        if (authors.some((a) => !a.name || a.name.length === 0)) {
+          throw new Error("one or more author names are empty");
+        }
+        return authors;
+      };
+      const getTags = (workMeta, className) => {
+        const tags = Array.from(
+          workMeta.querySelectorAll(`dd.${className}.tags a`)
+        )
+          .map((a) => {
+            var _a;
+            return (_a = a.textContent) === null || _a === void 0
+              ? void 0
+              : _a.trim();
+          })
+          .filter(Boolean);
+        return tags.length > 0 ? tags : null;
+      };
+      const parseNumber = (text) => {
+        if (!text) return null;
+        const cleanText = text.replace(/,/g, "").trim();
+        const parsed = parseInt(cleanText, 10);
+        return isNaN(parsed) ? null : parsed;
+      };
+      const getOptionalStatsValue = (workMeta, className) => {
         var _a, _b;
         return (
           ((_b =
-            (_a = ctx.querySelector(sel)) === null || _a === void 0
+            (_a = workMeta.querySelector(`dd.${className}`)) === null ||
+            _a === void 0
               ? void 0
               : _a.textContent) === null || _b === void 0
             ? void 0
             : _b.trim()) || null
         );
       };
-      const extractTexts = (sel, ctx = document) => {
-        const results = Array.from(ctx.querySelectorAll(sel))
-          .map((el) => {
-            var _a;
-            return (
-              ((_a = el.textContent) === null || _a === void 0
-                ? void 0
-                : _a.trim()) || ""
-            );
-          })
-          .filter(Boolean);
-        return results.length > 0 ? results : null;
-      };
-      const extractNameUrlPairs = (sel, ctx = document) => {
-        const results = Array.from(ctx.querySelectorAll(sel))
-          .map((el) => {
-            var _a;
-            const anchor = el;
-            const name =
-              (_a = anchor.textContent) === null || _a === void 0
-                ? void 0
-                : _a.trim();
-            const url = anchor.href;
-            return name && url ? { name, url } : null;
-          })
-          .filter((item) => item !== null);
-        return results.length > 0 ? results : null;
-      };
-      const getWorkAndAuthor = (li) => {
-        var _a;
-        const workLink = li.querySelector(
-          'a[href*="/works/"], a[href*="/external_works/"]'
-        );
-        const authorLink = li.querySelector('a[href*="/users/"]');
-        if (!workLink || !workLink.textContent || !workLink.href) return null;
-        const isExternal = workLink.href.includes("external_works");
-        let authorName = "Anonymous";
-        let authorUrl = "";
-        if (authorLink && authorLink.textContent) {
-          authorName = authorLink.textContent.trim();
-          authorUrl = authorLink.href;
-        } else if (
-          (_a = li.textContent) === null || _a === void 0
+      const getStatsValue = (workMeta, className) => {
+        var _a, _b;
+        const value =
+          (_b =
+            (_a = workMeta.querySelector(`dd.${className}`)) === null ||
+            _a === void 0
+              ? void 0
+              : _a.textContent) === null || _b === void 0
             ? void 0
-            : _a.includes(" by ")
-        ) {
-          authorName = li.textContent
-            .split(" by ")
-            .pop()
-            .trim()
-            .replace(/\.$/, "");
+            : _b.trim();
+        if (!value) {
+          throw new Error(`Critical stat "${className}" not found`);
         }
-        return {
-          work: {
-            name: workLink.textContent.trim(),
-            url: workLink.href,
-          },
-          author: authorUrl ? { name: authorName, url: authorUrl } : null,
-          external: isExternal,
-        };
+        return value;
       };
-      const extractAssociations = () => {
+      const getStatsValueNumber = (workMeta, className) => {
+        var _a;
+        const text =
+          (_a = workMeta.querySelector(`dd.${className}`)) === null ||
+          _a === void 0
+            ? void 0
+            : _a.textContent;
+        if (!text) {
+          throw new Error(`Critical numeric stat "${className}" is missing.`);
+        }
+        const value = parseNumber(text);
+        if (value === null) {
+          throw new Error(`Critical numeric stat "${className}" is invalid.`);
+        }
+        return value;
+      };
+      const getOptionalStatsValueNumber = (workMeta, className) => {
+        var _a;
+        const text =
+          (_a = workMeta.querySelector(`dd.${className}`)) === null ||
+          _a === void 0
+            ? void 0
+            : _a.textContent;
+        if (!text) {
+          return null;
+        }
+        return parseNumber(text);
+      };
+      const getChapterStats = (workMeta) => {
+        var _a;
+        const raw =
+          (_a = workMeta.querySelector("dd.chapters")) === null || _a === void 0
+            ? void 0
+            : _a.textContent;
+        if (!raw) throw new Error("Chapter stat not found");
+        const parts = raw.split("/");
+        if (parts.length !== 2)
+          throw new Error(`Unexpected chapter format: ${raw}`);
+        const current = parseNumber(parts[0]);
+        if (current === null)
+          throw new Error(`Could not parse current chapters from: ${parts[0]}`);
+        const expectedStr = parts[1].trim();
+        const expected = expectedStr === "?" ? null : parseNumber(expectedStr);
+        return { chapters: current, expected_chapters: expected };
+      };
+      const getSummaryOrNotes = (container, selector) => {
+        const block = container.querySelector(
+          `${selector} blockquote.userstuff`
+        );
+        if (!block) return null;
+        return block.innerHTML
+          .replace(/<[^>]*>/g, "")
+          .replace(/^[\n\r]+/, "")
+          .trim();
+      };
+      const getSeries = (workMeta) => {
+        const seriesSpans = Array.from(
+          workMeta.querySelectorAll("dd.series span.series")
+        );
+        if (seriesSpans.length === 0) return null;
+        const results = seriesSpans.map((span) => {
+          const positionSpan = span.querySelector("span.position");
+          const link =
+            positionSpan === null || positionSpan === void 0
+              ? void 0
+              : positionSpan.querySelector("a");
+          if (!positionSpan || !link || !link.textContent) {
+            throw new Error("Could not parse series link or position");
+          }
+          const text = positionSpan.textContent || "";
+          const partMatch = text.match(/Part\s+(\d+)/i);
+          if (!partMatch) {
+            throw new Error(`Could not find Part number in text: "${text}"`);
+          }
+          const partNumber = parseNumber(partMatch[1]);
+          if (partNumber === null) {
+            throw new Error(
+              `Could not parse Part number as integer: "${partMatch[1]}"`
+            );
+          }
+          return {
+            name: link.textContent.trim(),
+            url: link.href,
+            part: partNumber,
+          };
+        });
+        return results.length > 0 ? results : null;
+      };
+      const getCollections = (workMeta) => {
+        const links = Array.from(workMeta.querySelectorAll("dd.collections a"));
+        const results = links.map((a) => {
+          var _a;
+          return {
+            name:
+              (_a = a.textContent) === null || _a === void 0
+                ? void 0
+                : _a.trim(),
+            url: a.href,
+          };
+        });
+        return results.length > 0 ? results : null;
+      };
+      const getGifts = (workSkin) => {
         const gifts = [];
-        const inspired = [];
-        const items = workSkin.querySelectorAll(
-          ".notes.module ul.associations li"
+        const items = Array.from(
+          workSkin.querySelectorAll(".notes.module ul.associations li")
         );
         items.forEach((li) => {
           var _a;
-          const text =
-            ((_a = li.textContent) === null || _a === void 0
+          if (
+            (_a = li.textContent) === null || _a === void 0
               ? void 0
-              : _a.toLowerCase()) || "";
-          if (text.includes("inspired by")) {
-            const item = getWorkAndAuthor(li);
-            if (item) inspired.push(item);
-          } else if (text.includes("for ")) {
-            const recipients = Array.from(
-              li.querySelectorAll('a[href*="/users/"]')
-            )
-              .map((a) => {
-                var _a;
-                const name =
-                  (_a = a.textContent) === null || _a === void 0
-                    ? void 0
-                    : _a.trim();
-                const url = a.href;
-                return name && url ? { name, url } : null;
-              })
-              .filter((r) => r !== null);
-            gifts.push(...recipients);
+              : _a.toLowerCase().includes("for ")
+          ) {
+            const links = Array.from(li.querySelectorAll("a[href]"));
+            links.forEach((a) => {
+              var _a;
+              const name =
+                (_a = a.textContent) === null || _a === void 0
+                  ? void 0
+                  : _a.trim();
+              if (!name)
+                throw new Error(
+                  "Gift section found but recipient name is missing"
+                );
+              gifts.push({ name, url: a.href });
+            });
           }
         });
-        return {
-          gifts: gifts.length > 0 ? gifts : null,
-          inspired_by_parent: inspired.length > 0 ? inspired : null,
-        };
+        return gifts.length > 0 ? gifts : null;
       };
-      const extractSeries = () => {
-        const seriesDd = workMeta.querySelector("dd.series");
-        if (!seriesDd) return null;
-        const seriesSpans = seriesDd.querySelectorAll("span.series");
-        const results = Array.from(seriesSpans)
-          .map((span) => {
-            var _a, _b;
-            const pos = span.querySelector(".position");
-            if (!pos) return null;
-            const link = pos.querySelector("a");
-            const partMatch =
-              (_a = pos.textContent) === null || _a === void 0
-                ? void 0
-                : _a.trim().match(/Part (\d+)/i);
-            const name =
-              (_b =
-                link === null || link === void 0
-                  ? void 0
-                  : link.textContent) === null || _b === void 0
-                ? void 0
-                : _b.trim();
-            const url = link
-              ? `https://archiveofourown.org${link.getAttribute("href")}`
-              : null;
-            const part = partMatch ? partMatch[1] : null;
-            if (name && url && part) {
-              return { name, url, part };
+      const getInspiredParents = (workSkin) => {
+        const inspired = [];
+        const items = Array.from(
+          workSkin.querySelectorAll(".notes.module ul.associations li")
+        );
+        items.forEach((li) => {
+          const text = (li.textContent || "").trim();
+          if (text.toLowerCase().includes("inspired by")) {
+            const workLink = li.querySelector(
+              'a[href*="/works/"], a[href*="/external_works/"]'
+            );
+            if (!workLink || !workLink.textContent) return;
+            const work_name = workLink.textContent.trim();
+            const work_url = workLink.href;
+            const authors = [];
+            const authorLinks = Array.from(
+              li.querySelectorAll('a[href*="/users/"]')
+            );
+            if (authorLinks.length > 0) {
+              authorLinks.forEach((link) => {
+                var _a;
+                authors.push({
+                  name:
+                    ((_a = link.textContent) === null || _a === void 0
+                      ? void 0
+                      : _a.trim()) || "Unknown",
+                  url: link.href,
+                });
+              });
+            } else {
+              const cleanText = text.replace(/\s+/g, " ");
+              const parts = cleanText.split(/\s+by\s+/i);
+              if (parts.length >= 2) {
+                const author_name = parts[parts.length - 1]
+                  .trim()
+                  .replace(/\.$/, "");
+                authors.push({ name: author_name, url: null });
+              }
             }
-            return null;
-          })
-          .filter((item) => item !== null);
+            inspired.push({ name: work_name, url: work_url, authors });
+          }
+        });
+        return inspired.length > 0 ? inspired : null;
+      };
+      const getInspiredChildren = (workSkin) => {
+        const container = workSkin.querySelector("#children");
+        if (!container) return null;
+        const items = Array.from(container.querySelectorAll("ul li"));
+        const results = items.map((li) => {
+          var _a;
+          const workLink = li.querySelector('a[href*="/works/"]');
+          if (!workLink || !workLink.textContent) {
+            throw new Error(
+              "Inspired child item found but work link is missing"
+            );
+          }
+          const work_name = workLink.textContent.trim();
+          const work_url = workLink.href;
+          const authors = [];
+          const authorLinks = Array.from(
+            li.querySelectorAll('a[href*="/users/"]')
+          );
+          if (authorLinks.length > 0) {
+            authorLinks.forEach((link) => {
+              var _a;
+              authors.push({
+                name:
+                  ((_a = link.textContent) === null || _a === void 0
+                    ? void 0
+                    : _a.trim()) || "Unknown",
+                url: link.href,
+              });
+            });
+          } else {
+            const fullText =
+              ((_a = li.textContent) === null || _a === void 0
+                ? void 0
+                : _a.trim()) || "";
+            const lastByIndex = fullText.lastIndexOf(" by ");
+            if (lastByIndex !== -1) {
+              const author_name = fullText.substring(lastByIndex + 4).trim();
+              authors.push({ name: author_name, url: null });
+            }
+          }
+          return { name: work_name, url: work_url, authors };
+        });
         return results.length > 0 ? results : null;
       };
-      const extractStats = () => {
-        var _a, _b, _c;
-        const stats = {};
-        const elements = workMeta.querySelectorAll("dl.stats dt, dl.stats dd");
-        if (elements.length === 0) return null;
-        for (let i = 0; i < elements.length; i += 2) {
-          const key =
-            (_a = elements[i].textContent) === null || _a === void 0
-              ? void 0
-              : _a.replace(":", "").trim().toLowerCase();
-          const value =
-            (_c =
-              (_b = elements[i + 1]) === null || _b === void 0
-                ? void 0
-                : _b.textContent) === null || _c === void 0
-              ? void 0
-              : _c.trim();
-          if (key && value) stats[key] = value;
-        }
-        return Object.keys(stats).length > 0 ? stats : null;
+      const getHidden = (workSkin) => {
+        return (
+          workSkin.querySelector('h2.title.heading img[alt="(Restricted)"]') !==
+          null
+        );
       };
-      const associations = extractAssociations();
-      const isRestricted =
-        workSkin.querySelector('h2.title.heading img[alt="(Restricted)"]') !==
-        null;
-      const title = extractText("h2.title.heading", workSkin);
-      const language = extractText("dd.language", workMeta);
-      if (!title) return { current_url, error: "no title found" };
-      if (!language) return { current_url, error: "no language found" };
-      return {
-        type: "success",
-        current_url,
-        title,
-        language,
-        authors: extractNameUrlPairs(
-          'h3.byline.heading a[rel="author"]',
-          workSkin
-        ),
-        gifts: associations.gifts,
-        inspired_by_parent: associations.inspired_by_parent,
-        inspired_works_children: (() => {
-          const items = Array.from(
-            document.querySelectorAll("#children ul li")
-          );
-          const results = items
-            .map((li) => getWorkAndAuthor(li))
-            .filter((i) => i !== null);
-          return results.length > 0 ? results : null;
-        })(),
-        summary: extractText("blockquote.userstuff", workSkin),
-        categories: extractTexts("dd.category.tags a", workMeta),
-        rating: extractTexts("dd.rating.tags a", workMeta),
-        archive_warnings: extractTexts("dd.warning.tags a", workMeta),
-        fandoms: extractTexts("dd.fandom.tags a", workMeta),
-        characters: extractTexts("dd.character.tags a", workMeta),
-        relationships: extractTexts("dd.relationship.tags a", workMeta),
-        additional_tags: extractTexts("dd.freeform.tags a", workMeta),
-        series: extractSeries(),
-        collections: extractNameUrlPairs("dd.collections a", workMeta),
-        stats: extractStats(),
-        hidden: isRestricted,
-      };
+      try {
+        const workMeta = getWorkMeta();
+        const workSkin = getWorkSkin();
+        const chapterData = getChapterStats(workMeta);
+        const status = getOptionalStatsValue(workMeta, "status");
+        const completed =
+          chapterData.chapters === chapterData.expected_chapters;
+        const successfulScrape = {
+          current_url,
+          title: getTitle(workSkin),
+          authors: getAuthors(workSkin),
+          hidden: getHidden(workSkin),
+          gifts: getGifts(workSkin),
+          inspired_parent: getInspiredParents(workSkin),
+          inspired_children: getInspiredChildren(workSkin),
+          series: getSeries(workMeta),
+          collections: getCollections(workMeta),
+          summary: getSummaryOrNotes(workSkin, ".summary"),
+          notes: getSummaryOrNotes(workSkin, ".notes"),
+          categories: getTags(workMeta, "category"),
+          rating: getTags(workMeta, "rating"),
+          archive_warnings: getTags(workMeta, "warning"),
+          fandoms: getTags(workMeta, "fandom"),
+          characters: getTags(workMeta, "character"),
+          relationships: getTags(workMeta, "relationship"),
+          additional_tags: getTags(workMeta, "freeform"),
+          language: getStatsValue(workMeta, "language"),
+          published: getStatsValue(workMeta, "published"),
+          chapters: chapterData.chapters,
+          expected_chapters: chapterData.expected_chapters,
+          words: getStatsValueNumber(workMeta, "words"),
+          hits: getStatsValueNumber(workMeta, "hits"),
+          updated: completed === false ? status : null,
+          completed: completed === true ? status : null,
+          kudos: getOptionalStatsValueNumber(workMeta, "kudos"),
+          bookmarks: getOptionalStatsValueNumber(workMeta, "bookmarks"),
+          comments: getOptionalStatsValueNumber(workMeta, "comments"),
+        };
+        return successfulScrape;
+      } catch (error) {
+        return {
+          current_url,
+          error: error.message || "An unknown scraping error occurred",
+        };
+      }
     };
     const metadata = getAO3Metadata();
-    // console.log("AO3 Metadata Captured:", metadata);
+    console.log("AO3 Metadata Captured:", metadata);
     if (window.ReactNativeWebView) {
       window.ReactNativeWebView.postMessage(JSON.stringify(metadata));
     }
