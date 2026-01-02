@@ -25,6 +25,15 @@ type Collections =
     }[]
   | null;
 
+// New Prompt Types
+type Prompt = {
+  url: string;
+  prompters: { name: string; url: string | null }[];
+  collection: { name: string; url: string };
+};
+
+type Prompts = Prompt[] | null;
+
 type InspiredWork = {
   name: string;
   url: string;
@@ -45,6 +54,7 @@ interface AO3SuccessMetadata {
   authors: Authors;
 
   gifts: Gifts;
+  prompts: Prompts; // Added
 
   inspired_parent: InspiredWorks;
   inspired_children: InspiredWorks;
@@ -343,6 +353,59 @@ interface Window {
         return gifts.length > 0 ? gifts : null;
       };
 
+      const getPrompts = (workSkin: Element): Prompts => {
+        const prompts: Prompt[] = [];
+        const items = Array.from(
+          workSkin.querySelectorAll(".notes.module ul.associations li")
+        );
+
+        items.forEach((li) => {
+          const text = li.textContent || "";
+          if (text.toLowerCase().includes("in response to a prompt")) {
+            const promptLink = li.querySelector(
+              'a[href*="/prompts/"]'
+            ) as HTMLAnchorElement | null;
+            const collectionLink = li.querySelector(
+              'a[href^="/collections/"]:not([href*="/prompts/"])'
+            ) as HTMLAnchorElement | null;
+
+            if (promptLink && collectionLink) {
+              const prompters: { name: string; url: string | null }[] = [];
+
+              // 1. Find all linked authors within this list item
+              const authorLinks = Array.from(
+                li.querySelectorAll('a[rel="author"], a[href*="/users/"]')
+              ) as HTMLAnchorElement[];
+
+              if (authorLinks.length > 0) {
+                authorLinks.forEach((link) => {
+                  prompters.push({
+                    name: link.textContent?.trim() || "Unknown",
+                    url: link.href,
+                  });
+                });
+              }
+
+              // 2. Check for "Anonymous" text if no links or as part of the text
+              // This handles the "prompt by Anonymous" case provided in your HTML
+              if (text.match(/\bby\s+Anonymous\b/i)) {
+                prompters.push({ name: "Anonymous", url: null });
+              }
+
+              prompts.push({
+                url: promptLink.href,
+                prompters,
+                collection: {
+                  name: collectionLink.textContent?.trim() || "Unknown",
+                  url: collectionLink.href,
+                },
+              });
+            }
+          }
+        });
+        return prompts.length > 0 ? prompts : null;
+      };
+
       const getInspiredParents = (workSkin: Element): InspiredWorks => {
         const inspired: InspiredWork[] = [];
         const items = Array.from(
@@ -462,6 +525,7 @@ interface Window {
           hidden: getHidden(workSkin),
 
           gifts: getGifts(workSkin),
+          prompts: getPrompts(workSkin),
 
           inspired_parent: getInspiredParents(workSkin),
 
